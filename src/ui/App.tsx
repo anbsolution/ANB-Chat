@@ -7,13 +7,68 @@ import { ATTACHMENT_MARKER, encryptAndUploadAttachment, downloadAndDecryptAttach
 
 type Profile = { id:string; email?:string; username?:string; public_key?:string };
 export default function App() {
- const [session,setSession] = useState<any>(null); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [notice,setNotice]=useState(''); const [busy,setBusy]=useState(false); const [active,setActive]=useState<'chats'|'calls'|'settings'>('chats'); const [target,setTarget]=useState(''); const [message,setMessage]=useState(''); const [messages,setMessages]=useState<{id:string; body:string; mine:boolean; time:string}[]>([]); const [profile,setProfile]=useState<Profile|null>(null); const [activeRecipient,setActiveRecipient]=useState<{id:string;email:string|null;username:string|null;public_key:string|null}|null>(null); const [fingerprint,setFingerprint]=useState(''); const [ownFingerprint,setOwnFingerprint]=useState(''); const [keyNotice,setKeyNotice]=useState(''); const [selectedFile,setSelectedFile]=useState<File|null>(null); const [attachmentBusy,setAttachmentBusy]=useState(false);
+ const [session,setSession] = useState<any>(null); const [email,setEmail]=useState(''); const [otp,setOtp]=useState(''); const [otpSent,setOtpSent]=useState(false); const [notice,setNotice]=useState(''); const [busy,setBusy]=useState(false); const [active,setActive]=useState<'chats'|'calls'|'settings'>('chats'); const [target,setTarget]=useState(''); const [message,setMessage]=useState(''); const [messages,setMessages]=useState<{id:string; body:string; mine:boolean; time:string}[]>([]); const [profile,setProfile]=useState<Profile|null>(null); const [activeRecipient,setActiveRecipient]=useState<{id:string;email:string|null;username:string|null;public_key:string|null}|null>(null); const [fingerprint,setFingerprint]=useState(''); const [ownFingerprint,setOwnFingerprint]=useState(''); const [keyNotice,setKeyNotice]=useState(''); const [selectedFile,setSelectedFile]=useState<File|null>(null); const [attachmentBusy,setAttachmentBusy]=useState(false);
  useEffect(()=>{ if(!supabase) return; supabase.auth.getSession().then(({data})=>setSession(data.session)); const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s)); return ()=>subscription.unsubscribe(); },[]);
  useEffect(()=>{ if(!session || !supabase) return; let alive=true; (async()=>{ const user=session.user; const identityKey=user.email ?? user.id; const {data,error}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle(); if(error) throw error; let identity=loadIdentity(identityKey); if(data?.public_key && !identity){ if(alive){setProfile(data);setNotice('Your existing encryption key is missing from this browser. For safety, ANB Chat did not replace it. Existing encrypted messages may be unavailable on this device.');} return; } if(!identity){identity=await createIdentity();saveIdentity(identityKey,identity);} const username=(user.email??'user').split('@')[0].toLowerCase(); if(!data){ const {error:insertError}=await supabase.from('profiles').insert({id:user.id,email:user.email,public_key:identity.publicKey,username}); if(insertError) throw insertError; } else if(!data.public_key){ const {error:updateError}=await supabase.from('profiles').update({public_key:identity.publicKey}).eq('id',user.id); if(updateError) throw updateError; } const {data:latest,error:latestError}=await supabase.from('profiles').select('*').eq('id',user.id).single(); if(latestError) throw latestError; if(alive)setProfile(latest); })().catch(e=>setNotice(e.message)); return ()=>{alive=false}; },[session]);
  useEffect(()=>{ let alive=true; if(profile?.public_key){ keyFingerprint(profile.public_key).then(value=>{if(alive)setOwnFingerprint(value)}).catch(()=>{if(alive)setOwnFingerprint('Could not calculate fingerprint')}); } return ()=>{alive=false}; },[profile?.public_key]);
  useEffect(()=>{ if(!session?.user || !supabase) return; const channel=subscribeToIncomingMessages(session.user.id, async incoming=>{ if(activeRecipient && incoming.sender_id===activeRecipient.id){ try { const rows=await loadConversation(activeRecipient.id); const own=loadIdentity(session.user.email ?? session.user.id); if(!own) return; const rendered=await Promise.all(rows.map(async row=>{ const mine=row.sender_id===session.user.id; const sender=mine?null:await getProfileById(row.sender_id); const senderKey=mine?own.publicKey:sender?.public_key; let body='[Unable to decrypt message]'; if(senderKey){ try { body=await decryptFromSender(row.ciphertext,senderKey,own.privateKey); } catch { body='[Cannot decrypt — verify contact key]'; } } return {id:row.id,body,mine,time:new Date(row.created_at).toLocaleTimeString()}; })); setMessages(rendered); } catch(e:any){ setNotice(e?.message ?? 'Could not refresh incoming messages.'); } } }); return ()=>{ void supabase?.removeChannel(channel); }; },[session,activeRecipient]);
  async function verifyContactKey(){ setFingerprint(''); setKeyNotice(''); try { const contact=await findRecipient(target); const value=await keyFingerprint(contact.public_key!); setActiveRecipient(contact); setFingerprint(value); setKeyNotice('Compare this fingerprint with your contact using a separate trusted channel. It is not verified until both sides compare it.'); } catch(e:any){setKeyNotice(e?.message ?? 'Could not load contact key.');} }
- async function auth(mode:'in'|'up') { if(!supabase){setNotice('Supabase setup required. Follow SETUP.md, then add your .env values.');return;} setBusy(true);setNotice(''); try { const result=mode==='up'?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password}); if(result.error) throw result.error; if(mode==='up'&&!result.data.session) setNotice('Check your email for the verification link, then sign in.'); else setSession(result.data.session); } catch(e:any){setNotice(e.message??'Authentication failed');} finally{setBusy(false);} }
+ async function requestOtp() {
+   if (!supabase) {
+     setNotice('Supabase setup required. Configure the repository secrets first.');
+     return;
+   }
+   const normalizedEmail = email.trim().toLowerCase();
+   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+     setNotice('Enter a valid email address.');
+     return;
+   }
+   setBusy(true);
+   setNotice('');
+   try {
+     const result = await supabase.auth.signInWithOtp({
+       email: normalizedEmail,
+       options: { shouldCreateUser: true }
+     });
+     if (result.error) throw result.error;
+     setEmail(normalizedEmail);
+     setOtpSent(true);
+     setNotice('If this address can receive mail, an email code has been sent. Check your inbox and spam folder.');
+   } catch (e: any) {
+     setNotice(e?.message ?? 'Could not send the email code.');
+   } finally {
+     setBusy(false);
+   }
+ }
+ async function verifyOtp() {
+   if (!supabase) {
+     setNotice('Supabase setup required.');
+     return;
+   }
+   const token = otp.trim();
+   if (!/^\d{6,8}$/.test(token)) {
+     setNotice('Enter the numeric code from your email.');
+     return;
+   }
+   setBusy(true);
+   setNotice('');
+   try {
+     const result = await supabase.auth.verifyOtp({
+       email: email.trim().toLowerCase(),
+       token,
+       type: 'email'
+     });
+     if (result.error) throw result.error;
+     if (!result.data.session) throw new Error('Verification succeeded but no session was returned. Try again.');
+     setSession(result.data.session);
+     setNotice('Email verified.');
+   } catch (e: any) {
+     setNotice(e?.message ?? 'Code verification failed.');
+   } finally {
+     setBusy(false);
+   }
+ }
+
  async function send() {
    if(!message.trim()||!target.trim()){setNotice('Enter a recipient email/username and a message.');return;}
    if(!supabase || !session?.user){setNotice('Sign in and configure Supabase first.');return;}
@@ -90,6 +145,31 @@ export default function App() {
    },error=>{setNotice(error.code===1?'Location permission was denied. Allow it only if you want to share your location.':'Could not get location. Check device location settings and try again.');setBusy(false);},{enableHighAccuracy:false,timeout:12000,maximumAge:30000});
  }
  async function logout(){await supabase?.auth.signOut();setSession(null);setProfile(null);} 
- if(!session) return <main className="auth-shell"><section className="auth-card"><div className="brand-mark"><ShieldCheck size={30}/></div><div className="eyebrow">PRIVATE BY DESIGN</div><h1>ANB <span>Chat</span></h1><p className="muted">Your conversations belong to you.</p><div className="security-note"><LockKeyhole size={18}/><span>Email identity. Private conversations. No phone number required.</span></div><label>Email address</label><input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)}/><label>Password</label><input type="password" autoComplete="current-password" placeholder="At least 8 characters" value={password} onChange={e=>setPassword(e.target.value)}/><button className="primary" disabled={busy||!email||password.length<8} onClick={()=>auth('in')}>{busy?'Please wait':'Sign in'}</button><button className="secondary" disabled={busy||!email||password.length<8} onClick={()=>auth('up')}>Create account</button>{notice&&<p className="notice">{notice}</p>}<p className="tiny">By continuing, you agree to use ANB Chat responsibly.</p>{!isSupabaseConfigured&&<div className="setup-warning"><CircleHelp size={17}/> Demo shell only — connect Supabase to enable accounts.</div>}</section></main>;
+ if(!session) return <main className="auth-shell">
+  <section className="auth-card auth-card-pro">
+    <div className="auth-brand-row">
+      <img className="auth-logo" src="/anb-chat-icon.svg" alt="ANB Chat icon"/>
+      <div><strong>ANB Chat</strong><small>Private messaging</small></div>
+    </div>
+    <div className="eyebrow">PRIVATE BY DESIGN</div>
+    <h1>Your chats.<br/><span>Your privacy.</span></h1>
+    <p className="muted">Sign in securely with a one-time code sent to your email. No password required.</p>
+    <div className="security-note"><LockKeyhole size={18}/><span>Email verification · Encrypted messaging · No phone number required</span></div>
+    <label htmlFor="anb-email">Email address</label>
+    <input id="anb-email" type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} disabled={busy || otpSent} onChange={e=>setEmail(e.target.value)}/>
+    {!otpSent ? <>
+      <button className="primary auth-action" disabled={busy || !email.trim()} onClick={requestOtp}>{busy?'Sending code…':'Send email code'} <Mail size={17}/></button>
+    </> : <>
+      <label htmlFor="anb-otp">Email verification code</label>
+      <input id="anb-otp" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8} placeholder="Enter email code" value={otp} disabled={busy} onChange={e=>setOtp(e.target.value.replace(/\D/g,'').slice(0,8))}/>
+      <button className="primary auth-action" disabled={busy || !/^\d{6,8}$/.test(otp.trim())} onClick={verifyOtp}>{busy?'Verifying…':'Verify code & sign in'} <ShieldCheck size={17}/></button>
+      <button className="secondary" disabled={busy} onClick={()=>{setOtp('');setOtpSent(false);setNotice('Enter your email again to request a new code.');}}>Change email</button>
+      <button className="text-action" disabled={busy} onClick={requestOtp}>Resend code</button>
+    </>}
+    {notice&&<p className="notice" role="status">{notice}</p>}
+    <p className="tiny">By continuing, you agree to use ANB Chat responsibly.</p>
+    {!isSupabaseConfigured&&<div className="setup-warning"><CircleHelp size={17}/> Demo mode — configure Supabase to enable accounts.</div>}
+  </section>
+ </main>;
  return <main className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark small"><ShieldCheck size={22}/></div><div><b>ANB Chat</b><small>Private messaging</small></div></div><div className="user-chip"><div className="avatar"><UserRound size={20}/></div><div className="user-meta"><b>{profile?.username??session.user.email?.split('@')[0]}</b><small>{session.user.email}</small></div><ShieldCheck size={17} className="verified"/></div><nav><button className={active==='chats'?'selected':''} onClick={()=>setActive('chats')}><MessageCircle size={19}/> Chats</button><button className={active==='calls'?'selected':''} onClick={()=>setActive('calls')}><Video size={19}/> Calls</button><button className={active==='settings'?'selected':''} onClick={()=>setActive('settings')}><Settings size={19}/> Settings</button></nav><div className="sidebar-bottom"><div className="e2ee-card"><LockKeyhole size={18}/><div><b>Encryption first</b><small>Private by design</small></div></div><button className="logout" onClick={logout}><LogOut size={18}/> Sign out</button></div></aside><section className="workspace">{active==='chats'?<><header className="topbar"><div><div className="eyebrow">MESSAGES</div><h2>Your conversations</h2></div><div className="online-pill"><span/> Secure session</div></header><div className="empty-state"><div className="empty-icon"><MessageCircle size={34}/></div><h3>Start a private conversation</h3><p>Start with a registered email address or username. Messages are encrypted on this device before upload.</p>{messages.length>0&&<div className="message-list">{messages.map(m=><div key={m.id} className={m.mine?'message-bubble mine':'message-bubble'}>{m.body.startsWith(ATTACHMENT_MARKER)?<><div className="attachment-card">{(()=>{try{const meta=JSON.parse(m.body.slice(ATTACHMENT_MARKER.length)) as AttachmentMetadata;return meta.mime.startsWith('image/')?<ImageIcon size={20}/>:meta.mime.startsWith('video/')?<Film size={20}/>:<FileText size={20}/>;}catch{return <FileText size={20}/>;}})()}<div><b>{(()=>{try{return (JSON.parse(m.body.slice(ATTACHMENT_MARKER.length)) as AttachmentMetadata).name}catch{return 'Encrypted attachment'}})()}</b><small>{(()=>{try{const meta=JSON.parse(m.body.slice(ATTACHMENT_MARKER.length)) as AttachmentMetadata;return `Encrypted ${meta.mime.startsWith('image/')?'image':meta.mime.startsWith('video/')?'video':'file'} · ${Math.max(1,Math.ceil(meta.size/1024))} KB`;}catch{return 'Encrypted attachment';}})()}</small></div><button className="attachment-download" onClick={()=>openAttachment(m.body)} aria-label="Download decrypted attachment"><Download size={17}/></button></div></>:m.body.startsWith('📍 Shared location')?<span>📍 Shared location<br/>{(()=>{const url=m.body.match(/https:\/\/maps\.google\.com\/\?q=-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/)?.[0];return url?<a href={url} target="_blank" rel="noopener noreferrer">Open in Google Maps</a>:null;})()}<br/>{m.body.split('\n').filter(line=>!line.startsWith('📍')&&!line.startsWith('https://maps.google.com/')).join('\n')}</span>:<span>{m.body}</span>}<small>{m.time}</small></div>)}</div>}<div className="composer"><input aria-label="Recipient email or username" placeholder="Recipient email or username" value={target} onChange={e=>{setTarget(e.target.value);setFingerprint('');setKeyNotice('');}}/><button className="verify-key-button" disabled={busy||!target.trim()} onClick={verifyContactKey} aria-label="Verify contact key"><ShieldCheck size={18}/></button><input aria-label="Message" placeholder="Write a message…" value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()}/><button disabled={busy} onClick={send} aria-label="Send encrypted message"><Send size={18}/></button><div className="attachment-tools"><input id="attachment-picker" className="hidden-file-input" type="file" accept="image/*,video/*,.pdf,.txt,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" onChange={e=>setSelectedFile(e.target.files?.[0]??null)}/><label className="tool-button" htmlFor="attachment-picker"><Paperclip size={17}/> File / media</label><button className="tool-button" disabled={busy||attachmentBusy||!selectedFile} onClick={sendAttachment}><Send size={16}/> {attachmentBusy?'Sending…':'Send file'}</button><button className="tool-button" disabled={busy||attachmentBusy} onClick={shareLocation}><MapPin size={17}/> Share location</button>{selectedFile&&<span className="selected-file">{selectedFile.name} · {Math.max(1,Math.ceil(selectedFile.size/1024))} KB</span>}</div></div>{fingerprint&&<div className="fingerprint-card"><b>Contact key fingerprint</b><code>{fingerprint}</code></div>}{keyNotice&&<p className="notice">{keyNotice}</p>}{notice&&<p className="notice">{notice}</p>}</div></>:active==='calls'?<div className="settings-page"><div className="eyebrow">REAL-TIME</div><h2>Audio & video calls</h2><p className="muted">Call interface is planned around WebRTC. Reliable calling requires a signaling backend and a configured TURN service for networks that block direct peer connections.</p><div className="feature-row"><Phone/><div><b>Voice calls</b><small>Microphone permissions and WebRTC media</small></div></div><div className="feature-row"><Video/><div><b>Video calls</b><small>Camera, mute, camera switch and call controls</small></div></div></div>:<div className="settings-page"><div className="eyebrow">ACCOUNT & PRIVACY</div><h2>Settings</h2><div className="feature-row"><Mail/><div><b>Email identity</b><small>{session.user.email}</small></div></div><div className="feature-row"><ShieldCheck/><div><b>Your public-key fingerprint</b><small>{profile?.public_key ? 'Use this identity fingerprint for an out-of-band comparison.' : 'Encryption identity is not initialized yet.'}</small>{profile?.public_key&&<code className="settings-fingerprint">{ownFingerprint||'Calculating fingerprint…'}</code>}</div></div><div className="feature-row"><LockKeyhole/><div><b>Key storage warning</b><small>Private keys currently use browser localStorage. Do not use sensitive conversations until native secure storage and key recovery are implemented.</small></div></div><div className="feature-row"><LockKeyhole/><div><b>Security status</b><small>Production security audit is required before public launch.</small></div></div></div>}</section></main>;
 }

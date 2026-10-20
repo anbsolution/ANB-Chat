@@ -4,3 +4,26 @@
 @media(max-width:760px){.app-shell{grid-template-columns:1fr}.sidebar{min-height:auto;padding:14px}.brand{padding-bottom:14px}.user-chip{margin-bottom:12px}.sidebar nav{grid-template-columns:repeat(3,1fr)}.sidebar nav button{justify-content:center;padding:11px 6px;font-size:12px}.sidebar-bottom{margin-top:12px}.e2ee-card{display:none}.workspace{padding:22px 16px}.empty-state{margin:8vh auto 0}.composer{flex-wrap:wrap}.composer input:first-child{flex:1 1 calc(100% - 56px)}.composer input:nth-child(3){flex:1 1 calc(100% - 58px)}}
 
 .attachment-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-basis:100%;padding-top:3px}.hidden-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.tool-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #2a5a57;border-radius:10px;background:#153333;color:#8cebd8;padding:10px 12px;font-size:11px;font-weight:700;cursor:pointer}.tool-button:disabled{opacity:.5;cursor:wait}.selected-file{font-size:11px;color:#a8b8cc;overflow-wrap:anywhere}.attachment-card{display:flex;align-items:center;gap:10px;min-width:190px;max-width:100%;color:#75e4cc}.attachment-card>div{flex:1;min-width:0}.attachment-card b{display:block;color:#eef5ff;font-size:12px;overflow-wrap:anywhere}.attachment-card small{display:block;color:#94a7be;font-size:10px;margin-top:4px}.attachment-download{border:0;border-radius:9px;background:#24483f;color:#a0f5e2;padding:8px;display:grid;place-items:center}.message-bubble:has(.attachment-card){min-width:min(260px,100%)}
+
+
+/* ANB Chat v1.2.0 — mobile-first OTP sign-in */
+.auth-card-pro{width:min(100%,460px);padding:clamp(24px,6vw,38px);background:linear-gradient(155deg,rgba(20,34,52,.98),rgba(10,18,31,.98));border-color:#2b4056;box-shadow:0 30px 100px #0007}
+.auth-brand-row{display:flex;align-items:center;gap:12px;margin-bottom:30px}
+.auth-brand-row strong{display:block;font:800 17px Manrope,sans-serif;letter-spacing:-.3px}
+.auth-brand-row small{display:block;color:#91a0b7;font-size:12px;margin-top:4px}
+.auth-logo{width:54px;height:54px;border-radius:17px;object-fit:cover;box-shadow:0 8px 24px #43cdbb25}
+.auth-card-pro .eyebrow{margin-bottom:12px}
+.auth-card-pro h1{font-size:clamp(31px,8vw,42px);line-height:1.12;letter-spacing:-1.8px;margin:8px 0 12px}
+.auth-card-pro h1 span{background:linear-gradient(90deg,#72e8cb,#58cce1);background-clip:text;-webkit-background-clip:text;color:transparent}
+.auth-card-pro .muted{font-size:14px;margin-bottom:20px}
+.auth-card-pro .security-note{margin:20px 0 24px;font-size:12px}
+.auth-card-pro label{font-size:12px;font-weight:600}
+.auth-card-pro input{min-height:52px;font-size:15px;border-radius:14px}
+.auth-card-pro input:focus{box-shadow:0 0 0 3px #65dfc21b}
+.auth-action{min-height:52px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px}
+.otp-input{text-align:center;letter-spacing:.28em;font-size:22px!important;font-weight:800}
+.text-action{display:block;margin:14px auto 0;border:0;background:transparent;color:#79e5d0;font-size:12px;font-weight:700;padding:10px}
+.text-action:disabled{opacity:.5}
+.auth-card-pro .notice{overflow-wrap:anywhere;background:#1c2b36;border:1px solid #334b5b;border-radius:12px;padding:12px}
+.auth-card-pro .setup-warning{align-items:flex-start;font-size:12px}
+@media(max-width:480px){.auth-shell{padding:16px;align-items:center}.auth-card-pro{border-radius:23px}.auth-brand-row{margin-bottom:25px}.auth-card-pro .tiny{line-height:1.7}}
