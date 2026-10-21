@@ -9,6 +9,15 @@
 6. Create two test accounts and verify email registration, sign-in, profile creation, sending from one account to the other, and decryption on both devices.
 7. Enable Realtime for `public.messages` and `public.call_signals` in Supabase if you want realtime subscriptions in a later implementation.
 
+## Password authentication and profile fields (v1.3.0)
+
+1. In Supabase Dashboard → SQL Editor, run `supabase/migrations/20261021_profile_signup_fields.sql` before testing the new signup screen. It adds `full_name`, `mobile`, and `invite_id` to `profiles` and makes non-empty mobile numbers unique.
+2. Email/password signup uses Supabase Auth. If email confirmation is enabled, users must confirm their email before their first login.
+3. Email/password login works directly through Supabase Auth.
+4. Mobile/password login requires the server-side Edge Function at `supabase/functions/mobile-login/index.ts`. Deploy it in Supabase Dashboard → Edge Functions as `mobile-login`. Keep `SUPABASE_SERVICE_ROLE_KEY` only in server-side function secrets; never add it to Vite variables or the Android app. The function returns a session only after password verification and does not return the account email.
+5. The optional Invite ID is stored as profile metadata only; invite-code validation, referrals, and rewards are not implemented.
+6. Before production, add endpoint rate limiting/CAPTCHA and review account-abuse protections. Do not use this prototype for sensitive real-world messages until the private-key storage limitations below are addressed.
+
 ## Android APK
 The GitHub Actions workflow builds the web assets and packages them with Capacitor. Upload the full tested project once to a public GitHub repository, then open Actions on GitHub mobile and run `ANB Chat Android APK`. Download the artifact only after the workflow is green. Do not compile the APK in Termux.
 

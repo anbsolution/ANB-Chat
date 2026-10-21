@@ -5,68 +5,52 @@ import { createIdentity, loadIdentity, saveIdentity, encryptForRecipient, decryp
 import { findRecipient, getProfileById, loadConversation, sendEncryptedMessage, subscribeToIncomingMessages } from '../lib/chat';
 import { ATTACHMENT_MARKER, encryptAndUploadAttachment, downloadAndDecryptAttachment, type AttachmentMetadata } from '../lib/attachments';
 
-type Profile = { id:string; email?:string; username?:string; public_key?:string };
+type Profile = { id:string; email?:string; username?:string; public_key?:string; full_name?:string; mobile?:string; invite_id?:string };
 export default function App() {
- const [session,setSession] = useState<any>(null); const [email,setEmail]=useState(''); const [otp,setOtp]=useState(''); const [otpSent,setOtpSent]=useState(false); const [notice,setNotice]=useState(''); const [busy,setBusy]=useState(false); const [active,setActive]=useState<'chats'|'calls'|'settings'>('chats'); const [target,setTarget]=useState(''); const [message,setMessage]=useState(''); const [messages,setMessages]=useState<{id:string; body:string; mine:boolean; time:string}[]>([]); const [profile,setProfile]=useState<Profile|null>(null); const [activeRecipient,setActiveRecipient]=useState<{id:string;email:string|null;username:string|null;public_key:string|null}|null>(null); const [fingerprint,setFingerprint]=useState(''); const [ownFingerprint,setOwnFingerprint]=useState(''); const [keyNotice,setKeyNotice]=useState(''); const [selectedFile,setSelectedFile]=useState<File|null>(null); const [attachmentBusy,setAttachmentBusy]=useState(false);
+ const [session,setSession] = useState<any>(null); const [email,setEmail]=useState(''); const [mobile,setMobile]=useState(''); const [fullName,setFullName]=useState(''); const [password,setPassword]=useState(''); const [confirmPassword,setConfirmPassword]=useState(''); const [inviteId,setInviteId]=useState(''); const [identifier,setIdentifier]=useState(''); const [authMode,setAuthMode]=useState<'login'|'signup'>('login'); const [notice,setNotice]=useState(''); const [busy,setBusy]=useState(false); const [active,setActive]=useState<'chats'|'calls'|'settings'>('chats'); const [target,setTarget]=useState(''); const [message,setMessage]=useState(''); const [messages,setMessages]=useState<{id:string; body:string; mine:boolean; time:string}[]>([]); const [profile,setProfile]=useState<Profile|null>(null); const [activeRecipient,setActiveRecipient]=useState<{id:string;email:string|null;username:string|null;public_key:string|null}|null>(null); const [fingerprint,setFingerprint]=useState(''); const [ownFingerprint,setOwnFingerprint]=useState(''); const [keyNotice,setKeyNotice]=useState(''); const [selectedFile,setSelectedFile]=useState<File|null>(null); const [attachmentBusy,setAttachmentBusy]=useState(false);
  useEffect(()=>{ if(!supabase) return; supabase.auth.getSession().then(({data})=>setSession(data.session)); const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s)); return ()=>subscription.unsubscribe(); },[]);
- useEffect(()=>{ if(!session || !supabase) return; let alive=true; (async()=>{ const user=session.user; const identityKey=user.email ?? user.id; const {data,error}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle(); if(error) throw error; let identity=loadIdentity(identityKey); if(data?.public_key && !identity){ if(alive){setProfile(data);setNotice('Your existing encryption key is missing from this browser. For safety, ANB Chat did not replace it. Existing encrypted messages may be unavailable on this device.');} return; } if(!identity){identity=await createIdentity();saveIdentity(identityKey,identity);} const username=(user.email??'user').split('@')[0].toLowerCase(); if(!data){ const {error:insertError}=await supabase.from('profiles').insert({id:user.id,email:user.email,public_key:identity.publicKey,username}); if(insertError) throw insertError; } else if(!data.public_key){ const {error:updateError}=await supabase.from('profiles').update({public_key:identity.publicKey}).eq('id',user.id); if(updateError) throw updateError; } const {data:latest,error:latestError}=await supabase.from('profiles').select('*').eq('id',user.id).single(); if(latestError) throw latestError; if(alive)setProfile(latest); })().catch(e=>setNotice(e.message)); return ()=>{alive=false}; },[session]);
+ useEffect(()=>{ if(!session || !supabase) return; let alive=true; (async()=>{ const user=session.user; const identityKey=user.email ?? user.id; const {data,error}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle(); if(error) throw error; let identity=loadIdentity(identityKey); if(data?.public_key && !identity){ if(alive){setProfile(data);setNotice('Your existing encryption key is missing from this browser. For safety, ANB Chat did not replace it. Existing encrypted messages may be unavailable on this device.');} return; } if(!identity){identity=await createIdentity();saveIdentity(identityKey,identity);} const username=(user.email??'user').split('@')[0].toLowerCase(); const metadata=user.user_metadata??{}; const profileFields={full_name:typeof metadata.full_name==='string'?metadata.full_name:'',mobile:typeof metadata.mobile==='string'?metadata.mobile:'',invite_id:typeof metadata.invite_id==='string'&&metadata.invite_id.trim()?metadata.invite_id.trim():null}; if(!data){ const {error:insertError}=await supabase.from('profiles').insert({id:user.id,email:user.email,public_key:identity.publicKey,username,...profileFields}); if(insertError) throw insertError; } else { const patch:any={}; if(!data.public_key) patch.public_key=identity.publicKey; if(!data.full_name&&profileFields.full_name) patch.full_name=profileFields.full_name; if(!data.mobile&&profileFields.mobile) patch.mobile=profileFields.mobile; if(!data.invite_id&&profileFields.invite_id) patch.invite_id=profileFields.invite_id; if(Object.keys(patch).length){ const {error:updateError}=await supabase.from('profiles').update(patch).eq('id',user.id); if(updateError) throw updateError; } } const {data:latest,error:latestError}=await supabase.from('profiles').select('*').eq('id',user.id).single(); if(latestError) throw latestError; if(alive)setProfile(latest); })().catch(e=>setNotice(e.message)); return ()=>{alive=false}; },[session]);
  useEffect(()=>{ let alive=true; if(profile?.public_key){ keyFingerprint(profile.public_key).then(value=>{if(alive)setOwnFingerprint(value)}).catch(()=>{if(alive)setOwnFingerprint('Could not calculate fingerprint')}); } return ()=>{alive=false}; },[profile?.public_key]);
  useEffect(()=>{ if(!session?.user || !supabase) return; const channel=subscribeToIncomingMessages(session.user.id, async incoming=>{ if(activeRecipient && incoming.sender_id===activeRecipient.id){ try { const rows=await loadConversation(activeRecipient.id); const own=loadIdentity(session.user.email ?? session.user.id); if(!own) return; const rendered=await Promise.all(rows.map(async row=>{ const mine=row.sender_id===session.user.id; const sender=mine?null:await getProfileById(row.sender_id); const senderKey=mine?own.publicKey:sender?.public_key; let body='[Unable to decrypt message]'; if(senderKey){ try { body=await decryptFromSender(row.ciphertext,senderKey,own.privateKey); } catch { body='[Cannot decrypt — verify contact key]'; } } return {id:row.id,body,mine,time:new Date(row.created_at).toLocaleTimeString()}; })); setMessages(rendered); } catch(e:any){ setNotice(e?.message ?? 'Could not refresh incoming messages.'); } } }); return ()=>{ void supabase?.removeChannel(channel); }; },[session,activeRecipient]);
  async function verifyContactKey(){ setFingerprint(''); setKeyNotice(''); try { const contact=await findRecipient(target); const value=await keyFingerprint(contact.public_key!); setActiveRecipient(contact); setFingerprint(value); setKeyNotice('Compare this fingerprint with your contact using a separate trusted channel. It is not verified until both sides compare it.'); } catch(e:any){setKeyNotice(e?.message ?? 'Could not load contact key.');} }
- async function requestOtp() {
-   if (!supabase) {
-     setNotice('Supabase setup required. Configure the repository secrets first.');
-     return;
-   }
-   const normalizedEmail = email.trim().toLowerCase();
-   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-     setNotice('Enter a valid email address.');
-     return;
-   }
-   setBusy(true);
-   setNotice('');
+ async function submitAuth() {
+   if (!supabase) { setNotice('Supabase setup required. Configure the repository secrets first.'); return; }
+   setBusy(true); setNotice('');
    try {
-     const result = await supabase.auth.signInWithOtp({
-       email: normalizedEmail,
-       options: { shouldCreateUser: true }
-     });
-     if (result.error) throw result.error;
-     setEmail(normalizedEmail);
-     setOtpSent(true);
-     setNotice('If this address can receive mail, an email code has been sent. Check your inbox and spam folder.');
-   } catch (e: any) {
-     setNotice(e?.message ?? 'Could not send the email code.');
-   } finally {
-     setBusy(false);
-   }
- }
- async function verifyOtp() {
-   if (!supabase) {
-     setNotice('Supabase setup required.');
-     return;
-   }
-   const token = otp.trim();
-   if (!/^\d{6,8}$/.test(token)) {
-     setNotice('Enter the numeric code from your email.');
-     return;
-   }
-   setBusy(true);
-   setNotice('');
-   try {
-     const result = await supabase.auth.verifyOtp({
-       email: email.trim().toLowerCase(),
-       token,
-       type: 'email'
-     });
-     if (result.error) throw result.error;
-     if (!result.data.session) throw new Error('Verification succeeded but no session was returned. Try again.');
-     setSession(result.data.session);
-     setNotice('Email verified.');
-   } catch (e: any) {
-     setNotice(e?.message ?? 'Code verification failed.');
-   } finally {
-     setBusy(false);
-   }
+     if (authMode === 'signup') {
+       const normalizedEmail=email.trim().toLowerCase();
+       const normalizedMobile=mobile.trim().replace(/[\\s()-]/g,'');
+       if(!fullName.trim()) throw new Error('Enter your name.');
+       if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) throw new Error('Enter a valid email address.');
+       if(!/^\\+?[0-9]{8,15}$/.test(normalizedMobile)) throw new Error('Enter a valid mobile number with country code, e.g. +91...');
+       if(password.length<8) throw new Error('Password must be at least 8 characters long.');
+       if(password!==confirmPassword) throw new Error('Passwords do not match.');
+       const result=await supabase.auth.signUp({email:normalizedEmail,password,options:{data:{full_name:fullName.trim(),mobile:normalizedMobile,invite_id:inviteId.trim()||null},emailRedirectTo:window.location.origin}});
+       if(result.error) throw result.error;
+       if(result.data.session){setSession(result.data.session);setNotice('Account created successfully.');}
+       else {setIdentifier(normalizedEmail);setAuthMode('login');setPassword('');setConfirmPassword('');setNotice('Account created. If email confirmation is enabled, confirm your email before logging in.');}
+     } else {
+       const value=identifier.trim();
+       if(!value) throw new Error('Enter your mobile number or email ID.');
+       if(!password) throw new Error('Enter your password.');
+       if(value.includes('@')) {
+         const result=await supabase.auth.signInWithPassword({email:value.toLowerCase(),password});
+         if(result.error) throw result.error;
+         if(!result.data.session) throw new Error('Login did not return a session. Please try again.');
+         setSession(result.data.session);
+       } else {
+         const {data,error}=await supabase.functions.invoke('mobile-login',{body:{mobile:value,password}});
+         if(error) throw new Error('Mobile login service is not deployed yet. Use your email ID for now, or deploy supabase/functions/mobile-login.');
+         if(data?.error) throw new Error(data.error);
+         if(!data?.session?.access_token) throw new Error('Mobile login failed. Check your credentials.');
+         const {data:sessionData,error:sessionError}=await supabase.auth.setSession(data.session);
+         if(sessionError) throw sessionError;
+         setSession(sessionData.session);
+       }
+       setNotice('Logged in successfully.');
+     }
+   } catch(e:any) { setNotice(e?.message??'Authentication failed.'); }
+   finally { setBusy(false); }
  }
 
  async function send() {
@@ -148,24 +132,35 @@ export default function App() {
  if(!session) return <main className="auth-shell">
   <section className="auth-card auth-card-pro">
     <div className="auth-brand-row">
-      <img className="auth-logo" src="/anb-chat-icon.svg" alt="ANB Chat icon"/>
+      <img className="auth-logo" src="/anb-chat-icon.png" alt="ANB Chat icon"/>
       <div><strong>ANB Chat</strong><small>Private messaging</small></div>
     </div>
     <div className="eyebrow">PRIVATE BY DESIGN</div>
-    <h1>Your chats.<br/><span>Your privacy.</span></h1>
-    <p className="muted">Sign in securely with a one-time code sent to your email. No password required.</p>
-    <div className="security-note"><LockKeyhole size={18}/><span>Email verification · Encrypted messaging · No phone number required</span></div>
-    <label htmlFor="anb-email">Email address</label>
-    <input id="anb-email" type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} disabled={busy || otpSent} onChange={e=>setEmail(e.target.value)}/>
-    {!otpSent ? <>
-      <button className="primary auth-action" disabled={busy || !email.trim()} onClick={requestOtp}>{busy?'Sending code…':'Send email code'} <Mail size={17}/></button>
+    <h1>{authMode==='signup'?'Create your':'Welcome'}<br/><span>{authMode==='signup'?'ANB account.':'back to ANB Chat.'}</span></h1>
+    <p className="muted">{authMode==='signup'?'Create your account to start chatting securely.':'Log in with your mobile number or email ID and password.'}</p>
+    <div className="security-note"><LockKeyhole size={18}/><span>Password-protected account · Encrypted messaging</span></div>
+    {authMode==='signup' ? <>
+      <label htmlFor="anb-name">Name</label>
+      <input id="anb-name" autoComplete="name" placeholder="Enter your full name" value={fullName} disabled={busy} onChange={e=>setFullName(e.target.value)}/>
+      <label htmlFor="anb-mobile">Mobile Number</label>
+      <input id="anb-mobile" type="tel" autoComplete="tel" placeholder="Include country code, e.g. +91..." value={mobile} disabled={busy} onChange={e=>setMobile(e.target.value)}/>
+      <label htmlFor="anb-email">Email ID</label>
+      <input id="anb-email" type="email" autoComplete="email" placeholder="you@example.com" value={email} disabled={busy} onChange={e=>setEmail(e.target.value)}/>
+      <label htmlFor="anb-password">Password</label>
+      <input id="anb-password" type="password" autoComplete="new-password" placeholder="Minimum 8 characters" value={password} disabled={busy} onChange={e=>setPassword(e.target.value)}/>
+      <label htmlFor="anb-confirm-password">Confirm Password</label>
+      <input id="anb-confirm-password" type="password" autoComplete="new-password" placeholder="Re-enter password" value={confirmPassword} disabled={busy} onChange={e=>setConfirmPassword(e.target.value)}/>
+      <label htmlFor="anb-invite">Invite ID <span className="muted">(Optional)</span></label>
+      <input id="anb-invite" placeholder="Enter invite ID if available" value={inviteId} disabled={busy} onChange={e=>setInviteId(e.target.value)}/>
+      <p className="auth-helper">Invite ID is saved with your profile; invite validity or rewards are not enabled yet.</p>
     </> : <>
-      <label htmlFor="anb-otp">Email verification code</label>
-      <input id="anb-otp" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8} placeholder="Enter email code" value={otp} disabled={busy} onChange={e=>setOtp(e.target.value.replace(/\D/g,'').slice(0,8))}/>
-      <button className="primary auth-action" disabled={busy || !/^\d{6,8}$/.test(otp.trim())} onClick={verifyOtp}>{busy?'Verifying…':'Verify code & sign in'} <ShieldCheck size={17}/></button>
-      <button className="secondary" disabled={busy} onClick={()=>{setOtp('');setOtpSent(false);setNotice('Enter your email again to request a new code.');}}>Change email</button>
-      <button className="text-action" disabled={busy} onClick={requestOtp}>Resend code</button>
+      <label htmlFor="anb-identifier">Mobile / Email ID</label>
+      <input id="anb-identifier" autoComplete="username" placeholder="Enter mobile number or email" value={identifier} disabled={busy} onChange={e=>setIdentifier(e.target.value)}/>
+      <label htmlFor="anb-login-password">Password</label>
+      <input id="anb-login-password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} disabled={busy} onChange={e=>setPassword(e.target.value)}/>
     </>}
+    <button className="primary auth-action" disabled={busy || (authMode==='signup'?(!fullName.trim()||!email.trim()||!mobile.trim()||password.length<8||password!==confirmPassword):(!identifier.trim()||!password))} onClick={submitAuth}>{busy?'Please wait…':(authMode==='signup'?'Create Account':'Log in')} <ShieldCheck size={17}/></button>
+    <button className="secondary" disabled={busy} onClick={()=>{setAuthMode(authMode==='signup'?'login':'signup');setPassword('');setConfirmPassword('');setNotice('');}}>{authMode==='signup'?'Already have an account? Log in':"Don't have an account? Create Account"}</button>
     {notice&&<p className="notice" role="status">{notice}</p>}
     <p className="tiny">By continuing, you agree to use ANB Chat responsibly.</p>
     {!isSupabaseConfigured&&<div className="setup-warning"><CircleHelp size={17}/> Demo mode — configure Supabase to enable accounts.</div>}

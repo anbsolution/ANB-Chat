@@ -5,6 +5,9 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
+  full_name text,
+  mobile text,
+  invite_id text,
   username text unique check (username is null or username = lower(username)),
   public_key text,
   created_at timestamptz not null default now()
@@ -41,6 +44,11 @@ do $$ begin
     alter table public.call_signals add constraint call_signals_payload_size check (octet_length(coalesce(payload::text, 'null')) <= 250000);
   end if;
 end $$;
+
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists mobile text;
+alter table public.profiles add column if not exists invite_id text;
+create unique index if not exists profiles_mobile_unique on public.profiles (mobile) where mobile is not null and length(trim(mobile)) > 0;
 
 create unique index if not exists profiles_username_lower_unique on public.profiles (lower(username)) where username is not null;
 

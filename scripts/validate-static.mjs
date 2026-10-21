@@ -82,3 +82,12 @@ if (duplicateNonceBug) failures++;
 
 console.log(`\nStatic validation: ${failures===0?'PASS':'FAIL'} (${checks-failures}/${checks} checks)`);
 process.exitCode = failures ? 1 : 0;
+
+const authSource = readFileSync(resolve(root,'src/ui/App.tsx'),'utf8');
+for (const [label,ok] of [
+  ['Password signup/login replaces email OTP UI',!authSource.includes('signInWithOtp') && !authSource.includes('verifyOtp')],
+  ['Signup UI includes name, mobile, confirm password and optional invite ID',authSource.includes('anb-name') && authSource.includes('anb-mobile') && authSource.includes('anb-confirm-password') && authSource.includes('anb-invite')],
+  ['Mobile login calls server-side function',authSource.includes("functions.invoke('mobile-login'")],
+  ['Mobile login Edge Function source exists',existsSync(resolve(root,'supabase/functions/mobile-login/index.ts'))],
+  ['Signup profile migration exists',existsSync(resolve(root,'supabase/migrations/20261021_profile_signup_fields.sql'))],
+]) { checks++; console.log(`${ok?'PASS':'FAIL'} ${label}`); if(!ok) failures++; }

@@ -6,7 +6,7 @@
 .attachment-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-basis:100%;padding-top:3px}.hidden-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.tool-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #2a5a57;border-radius:10px;background:#153333;color:#8cebd8;padding:10px 12px;font-size:11px;font-weight:700;cursor:pointer}.tool-button:disabled{opacity:.5;cursor:wait}.selected-file{font-size:11px;color:#a8b8cc;overflow-wrap:anywhere}.attachment-card{display:flex;align-items:center;gap:10px;min-width:190px;max-width:100%;color:#75e4cc}.attachment-card>div{flex:1;min-width:0}.attachment-card b{display:block;color:#eef5ff;font-size:12px;overflow-wrap:anywhere}.attachment-card small{display:block;color:#94a7be;font-size:10px;margin-top:4px}.attachment-download{border:0;border-radius:9px;background:#24483f;color:#a0f5e2;padding:8px;display:grid;place-items:center}.message-bubble:has(.attachment-card){min-width:min(260px,100%)}
 
 
-/* ANB Chat v1.2.0 — mobile-first OTP sign-in */
+/* ANB Chat v1.3.0 — password authentication and refreshed responsive UI */
 .auth-card-pro{width:min(100%,460px);padding:clamp(24px,6vw,38px);background:linear-gradient(155deg,rgba(20,34,52,.98),rgba(10,18,31,.98));border-color:#2b4056;box-shadow:0 30px 100px #0007}
 .auth-brand-row{display:flex;align-items:center;gap:12px;margin-bottom:30px}
 .auth-brand-row strong{display:block;font:800 17px Manrope,sans-serif;letter-spacing:-.3px}
@@ -27,3 +27,21 @@
 .auth-card-pro .notice{overflow-wrap:anywhere;background:#1c2b36;border:1px solid #334b5b;border-radius:12px;padding:12px}
 .auth-card-pro .setup-warning{align-items:flex-start;font-size:12px}
 @media(max-width:480px){.auth-shell{padding:16px;align-items:center}.auth-card-pro{border-radius:23px}.auth-brand-row{margin-bottom:25px}.auth-card-pro .tiny{line-height:1.7}}
+
+.auth-helper{font-size:11px;line-height:1.5;color:#8799b2;margin:8px 2px 12px}
+.auth-card-pro{position:relative;overflow:hidden}
+.auth-card-pro:before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,#61dfc4,transparent);opacity:.7}
+.auth-card-pro input{transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.auth-card-pro input::placeholder{color:#667992}
+.auth-card-pro .secondary{min-height:48px;line-height:1.4}
+.auth-card-pro .primary{background:linear-gradient(105deg,#70efc9,#35c8dc);box-shadow:0 8px 24px #23d4bb20;transition:transform .15s ease,filter .15s ease}
+.auth-card-pro .primary:not(:disabled):active{transform:scale(.99);filter:brightness(.96)}
+@media(max-width:480px){
+ .auth-shell{align-items:flex-start;padding:12px}
+ .auth-card-pro{margin:auto;padding:23px 20px;width:100%;border-radius:22px}
+ .auth-brand-row{margin-bottom:22px}
+ .auth-card-pro h1{font-size:clamp(29px,8vw,36px)}
+ .auth-card-pro .security-note{padding:11px;font-size:11px}
+ .auth-card-pro input{min-height:48px;padding:12px}
+ .auth-card-pro .tiny{margin-top:18px}
+}

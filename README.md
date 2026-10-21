@@ -95,3 +95,10 @@ The GitHub Actions workflow now runs `node scripts/validate-static.mjs`, then `n
 
 ### Media and location sharing (v1.1.1)
 ANB Chat now includes an MVP attachment flow for images, videos, documents, and common files (up to 20 MiB), with file bytes encrypted in the client before upload to a private Supabase Storage bucket. The attachment key is separately encrypted for the sender and recipient. Location sharing is opt-in and sends coordinates/map URL through the encrypted message flow after device permission is granted. Run `supabase/schema.sql` in Supabase to create the private bucket and RLS policies. Live integration testing and independent security review are still required before production use.
+
+
+## v1.3.0 authentication update
+- Signup fields: name, mobile number, email, password, confirm password, optional invite ID.
+- Login: mobile number or email ID plus password. Email login uses Supabase Auth; mobile login requires deploying `supabase/functions/mobile-login/index.ts` and applying `supabase/migrations/20261021_profile_signup_fields.sql`.
+- Invite IDs are stored but not validated or rewarded yet.
+- The GitHub Actions workflow builds the Android debug APK. It does not deploy Supabase Edge Functions automatically.
